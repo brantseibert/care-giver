@@ -1,0 +1,64 @@
+%md ## Care Giver Geo Location
+#### Create data path and obtain schema of the geo location data.
+
+%fs ls /mnt/care-giver/CareGiver/geolocation
+
+%fs head /mnt/care-giver/CareGiver/geolocation
+
+    {"careGiverID":"cg1001","time":1469501107,"lattitude":39.658219,"longitude":-104.960768}
+    {"careGiverID":"cg1002","time":1469501107,"lattitude":39.676693,"longitude":-104.96154}
+    {"careGiverID":"cg1003","time":1469501107,"lattitude":39.670102,"longitude":-104.974827}
+    {"careGiverID":"cg1004","time":1469501107,"lattitude":39.673367,"longitude":-104.973143}
+    {"careGiverID":"cg1005","time":1469501107,"lattitude":39.678771,"longitude":-104.976038}
+    {"careGiverID":"cg1006","time":1469501107,"lattitude":39.672139,"longitude":-104.940214}
+    {"careGiverID":"cg1007","time":1469501107,"lattitude":39.682319,"longitude":-104.98026}
+    {"careGiverID":"cg1008","time":1469501107,"lattitude":39.678714,"longitude":-104.983843}
+    {"careGiverID":"cg1009","time":1469501107,"lattitude":39.669114,"longitude":-104.987916}
+    {"careGiverID":"cg1010","time":1469501107,"lattitude":39.676013,"longitude":-104.952962}
+
+%md #### Import utility libraries.
+  import org.apache.spark.sql.functions._
+  import org.apache.spark.sql.streaming._
+  import org.apache.spark.sql.types._
+
+%md ####  Define path.
+  val careGiverGeoInputPath = "/mnt/care-giver/CareGiver"
+  val careGiverGeoParquetPath = "/mnt/care-giver/geolocation"
+
+%md #### Create DataFrame and print schema.
+  val geo1 = sqlContext.read.json("/mnt/care-giver/CareGiver/geolocation")
+  val geoView = geo1.createOrReplaceTemporaryView(geo1)
+  geo1.printSchema
+
+%md #### Manually define the schema.  // This is optional.
+  val careGiverGeoSchema = new StructType()
+      .add("careGiverID", StringType)
+      .add("time", TimestampType)
+      .add("lattitude", IntegerType)
+      .add("longitude", IntegerType)
+
+%md #### Start JSON event stream with the geo location of care givers.
+  val careGiverGeoStream = spark.readStream
+    .option("maxFilesPerTrigger", 1)
+    .option("basePath", "/mnt/care-giver/CareGiver/")
+    .schema(careGiverGeoSchema)
+    .json(careGiverGeoInputPath)
+
+%md #### Define a SQL handle to query the data.
+val careGiverGeoStreamQuery = careGiverGeoStream
+    .writeStream
+    .format("memory")        
+    .queryName("careGiverGeo")
+    .start()
+val geoView = createOrReplaceTemporaryView(geo1)
+
+%md ##### Keep a running count to monitor transmission.
+  %sql SELECT COUNT(careGiverID) FROM careGiverGeo
+
+%md #### Obtain the most recently reported geo location of care givers.
+  %sql SELECT lattitude, longitude FROM careGiverGeo
+
+%md #### Alternative syntax to query the data stream.  Checks for time of most recent JSON event.
+careGiverGeo.select("time").show()
+
+
